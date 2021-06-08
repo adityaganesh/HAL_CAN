@@ -69,7 +69,7 @@ typedef union
 
 /* External variables --------------------------------------------------------*/
 
-extern union recv_data RECIEVER;
+extern recv_data RECIEVER;
 extern HCD_HandleTypeDef hhcd_USB_OTG_FS;
 extern CAN_HandleTypeDef hcan1;
 extern CAN_HandleTypeDef HalCan1;
@@ -240,7 +240,7 @@ void CAN1_RX0_IRQHandler(void)
   /* USER CODE END CAN1_RX0_IRQn 0 */
   HAL_CAN_IRQHandler(&hcan1);
   /* USER CODE BEGIN CAN1_RX0_IRQn 1 */
-  union recv_data RECIEVER;
+  recv_data RECIEVER;
   HAL_CAN_GetRxMessage(&HalCan1,  CAN_RX_FIFO0 , &pRxHeader, RECIEVER.recieve);
   /* USER CODE END CAN1_RX0_IRQn 1 */
 }
