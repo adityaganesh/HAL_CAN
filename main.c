@@ -73,7 +73,7 @@ union tran_data
 
 
 
-//union recv_data RECIEVER;
+union recv_data RECIEVER;
 
 /* USER CODE END PV */
 
@@ -102,7 +102,7 @@ void MX_USB_HOST_Process(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-	union recv_data RECIEVER;
+
   /* USER CODE END 1 */
   
 
