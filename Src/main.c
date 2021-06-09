@@ -309,7 +309,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
          uint32_t id = 0x18DAFA00 ;
 		 create_request(0x18DAFA00 , 0x2D,0x08,0x08);
 
-		 uart_buf_len = sprintf(uart_buf,"%x , %x , %x , %x,\r\n",TRANSMIT.payload[0], TRANSMIT.payload[1], TRANSMIT.payload[2] ,id );
+		 uart_buf_len = sprintf(uart_buf,"%x , %x , %x , %lx,\r\n",TRANSMIT.payload[0], TRANSMIT.payload[1], TRANSMIT.payload[2] ,id );
 		 HAL_UART_Transmit(&huart2,(uint8_t *)uart_buf,uart_buf_len,100);
 		 HAL_GPIO_TogglePin(GPIOA , GPIO_PIN_5);
 
