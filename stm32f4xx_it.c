@@ -27,19 +27,7 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN TD */
-typedef union
-{
-	uint8_t recieve[8];
-    struct
-	{
 
-		uint8_t length;
-		uint8_t service_id_offset;
-		uint8_t parameter_id;
-		uint8_t data[5];
-	};
-
-}recv_data;
 /* USER CODE END TD */
 
 /* Private define ------------------------------------------------------------*/
@@ -68,16 +56,15 @@ typedef union
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
-
-extern recv_data RECIEVER;
 extern HCD_HandleTypeDef hhcd_USB_OTG_FS;
 extern CAN_HandleTypeDef hcan1;
-extern CAN_HandleTypeDef HalCan1;
-extern CAN_RxHeaderTypeDef pRxHeader;
-
-extern uint8_t a[8];
+extern TIM_HandleTypeDef htim10;
 /* USER CODE BEGIN EV */
-
+extern CAN_TxHeaderTypeDef pTxHeader;
+extern CAN_RxHeaderTypeDef pRxHeader;
+extern uint8_t rec_data[8];
+extern CAN_HandleTypeDef HalCan1;
+extern union tran_data TRANSMIT;
 /* USER CODE END EV */
 
 /******************************************************************************/
@@ -240,9 +227,23 @@ void CAN1_RX0_IRQHandler(void)
   /* USER CODE END CAN1_RX0_IRQn 0 */
   HAL_CAN_IRQHandler(&hcan1);
   /* USER CODE BEGIN CAN1_RX0_IRQn 1 */
-  recv_data RECIEVER;
-  HAL_CAN_GetRxMessage(&HalCan1,  CAN_RX_FIFO0 , &pRxHeader, RECIEVER.recieve);
+
+  HAL_CAN_GetRxMessage(&HalCan1,  CAN_RX_FIFO0 , &pRxHeader, rec_data);
   /* USER CODE END CAN1_RX0_IRQn 1 */
+}
+
+/**
+  * @brief This function handles TIM1 update interrupt and TIM10 global interrupt.
+  */
+void TIM1_UP_TIM10_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM1_UP_TIM10_IRQn 0 */
+
+  /* USER CODE END TIM1_UP_TIM10_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim10);
+  /* USER CODE BEGIN TIM1_UP_TIM10_IRQn 1 */
+
+  /* USER CODE END TIM1_UP_TIM10_IRQn 1 */
 }
 
 /**
