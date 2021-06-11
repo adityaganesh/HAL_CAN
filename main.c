@@ -133,7 +133,15 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
+  create_request(pTxHeader,0x18DAFA00,0x21, 0x30, 0x1,1); // Creation of request 1
 
+  create_request(pTxHeader,0x18DAFA00,0x21, 0x26, 0x2,2);  // Creation of request 2
+
+  create_request(pTxHeader,0x18DAFA00,0x21, 0x24, 0x1,3);  // Creation of request 3
+
+  create_request(pTxHeader,0x18DAFA00,0x21, 0x9a, 0x2,4);  // Creation of request 4
+
+  create_request(pTxHeader,0x18DAFA00,0x21, 0x3d, 0x1,5);  // Creation of request 5
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -152,15 +160,7 @@ int main(void)
 
   HAL_TIM_Base_Start_IT(&htim10);//Begin timer in interrupt mode see the ioc file to see the time at which interrupt is generated
 
-  create_request(pTxHeader,0x18DAFA00,0x21, 0x30, 0x1,1); // Creation of request 1
 
-  create_request(pTxHeader,0x18DAFA00,0x21, 0x26, 0x2,2);  // Creation of request 2
-
-  create_request(pTxHeader,0x18DAFA00,0x21, 0x24, 0x1,3);  // Creation of request 3
-
-  create_request(pTxHeader,0x18DAFA00,0x21, 0x9a, 0x2,4);  // Creation of request 4
-
-  create_request(pTxHeader,0x18DAFA00,0x21, 0x3d, 0x1,5);  // Creation of request 5
 
   /* USER CODE END 2 */
 
