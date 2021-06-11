@@ -63,27 +63,17 @@ uint8_t rec_data[8];//Data array used to store received data
 uint32_t TxMailbox;
 char uart_buf[50];//used for logging data to serial monitor
 int uart_buf_len;
-/*This union has a bit field structure so that it is easy to create the payload frame*/
-union tran_data
-{
-	uint8_t payload[8];
-	struct
-	{
-
-		uint8_t length:8;//length : LENGTH OF VALID BYTES
-		uint8_t service_id:8;//service_id : SERVICE ID OF YOUR REQUEST
-		uint8_t parameter_id:8;//parameter_id : PARAMETER ID OF YOUR REQUEST
-		uint8_t pad[5];//Padding data as it will not be used
-
-	};
-
-
+/*This multidimensional data array has all the requests payload so that it is easy to create the payload frame*/
+uint8_t trans_data[5][8] = {
+   {0x21, 0x30, 0x1, 0,0,0,0,0} ,   /*  payload request 1*/
+   {0x21, 0x26, 0x2, 0,0,0,0} ,   /*  payload request 2 */
+   {0x21, 0x24, 0x1,0,0,0,0},  /*  payload request 3*/
+   {0x21, 0x9a, 0x2,0,0,0,0},   /*  payload request 4 */
+   {0x21, 0x3d, 0x1, 0,0,0,0} /*  payload request 5 */
 };
 
-//Instance of transmission data union
-union tran_data TRANSMIT;
-
-
+uint8_t tim_flag = 0;
+uint8_t indx = 0 ;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -106,9 +96,10 @@ void MX_USB_HOST_Process(void);
  * length : LENGTH OF VALID BYTES
  * service_id : SERVICE ID OF YOUR REQUEST
  * parameter_id : PARAMETER ID OF YOUR REQUEST
+ * request_no : Index of the request you want to create
  *
  * */
-void create_request(CAN_TxHeaderTypeDef pTxHeader ,uint32_t identifier, uint8_t length , uint8_t service_id , uint8_t parameter_id);
+void create_request(CAN_TxHeaderTypeDef pTxHeader ,uint32_t identifier, uint8_t length , uint8_t service_id , uint8_t parameter_id,uint8_t request_no);
 
 
 /* USER CODE END PFP */
@@ -156,14 +147,73 @@ int main(void)
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
   HAL_CAN_Start(&HalCan1);//Begin the CAN module
+
   HAL_CAN_ActivateNotification(&HalCan1,  CAN_IT_RX_FIFO0_MSG_PENDING );//This enables the interrupts of our CAN module
+
   HAL_TIM_Base_Start_IT(&htim10);//Begin timer in interrupt mode see the ioc file to see the time at which interrupt is generated
+
+  create_request(pTxHeader,0x18DAFA00,0x21, 0x30, 0x1,1); // Creation of request 1
+
+  create_request(pTxHeader,0x18DAFA00,0x21, 0x26, 0x2,2);  // Creation of request 2
+
+  create_request(pTxHeader,0x18DAFA00,0x21, 0x24, 0x1,3);  // Creation of request 3
+
+  create_request(pTxHeader,0x18DAFA00,0x21, 0x9a, 0x2,4);  // Creation of request 4
+
+  create_request(pTxHeader,0x18DAFA00,0x21, 0x3d, 0x1,5);  // Creation of request 5
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  if(tim_flag == 1)
+	  {
+		  HAL_CAN_AddTxMessage(&HalCan1, &pTxHeader, trans_data[indx], &TxMailbox);//This will send the first transmission request
+		  while(HAL_CAN_IsTxMessagePending(&HalCan1,TxMailbox));//will wait until the request is sent
+          while(HAL_CAN_GetRxFifoFillLevel(&HalCan1,CAN_RX_FIFO0))//will wait until the response is recieved
+
+
+
+          HAL_CAN_GetRxMessage(&HalCan1,  CAN_RX_FIFO0 , &pRxHeader, rec_data);//callback for recieved response
+          if(rec_data[0] > 0 && rec_data[1] == trans_data[indx][1]+0x40 && trans_data[indx][2] == rec_data[2] )//checks if valid data bytes are more than 0 then checks service and parameter id
+          {
+        	  for(int i = 3;i<=rec_data[0];i++)
+        	  {
+        		  uart_buf_len = sprintf(uart_buf,"%x",rec_data[i] );
+        		  if(i != rec_data[0])
+        		  {
+        			  uart_buf_len = sprintf(uart_buf,"%x , ",rec_data[i] );//will print with comma if their are more valid data bytes
+
+        		  }
+        		  else
+        		  {
+        			  uart_buf_len = sprintf(uart_buf,"%x\n",rec_data[i] );// will not print comma as it is the last valid data byte
+
+        		  }
+        		  /*UART transmission*/
+        		  HAL_UART_Transmit(&huart2,(uint8_t *)uart_buf,uart_buf_len,100);
+
+
+        	  }
+
+
+     		 /*UART transmission*/
+
+
+
+
+          }
+          indx ++;//increase request index by 1 for next transmission request
+          if(indx == 5)
+          {
+
+        	  tim_flag = 0; //reset timer flag
+          }
+
+
+	  }
     /* USER CODE END WHILE */
     MX_USB_HOST_Process();
 
@@ -536,17 +586,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
 	if(htim == &htim10)
 	{
-         /*Calling the create request function to make the payload frame according to our requirement*/
-		 create_request(pTxHeader , 0x18DAFA00, TRANSMIT.service_id,TRANSMIT.service_id,TRANSMIT.service_id);
+        /*Raising the timer flag so that code in while loop starts running since ISR should be generally fast to execute*/
 
-		 /*Transmitting the created payload*/
-		 HAL_CAN_AddTxMessage(&HalCan1, &pTxHeader, TRANSMIT.payload, &TxMailbox);
+         tim_flag = 1;
 
-		 /*For logging of data*/
- 		 uart_buf_len = sprintf(uart_buf,"%x , %x , %x , %x,\r\n",TRANSMIT.payload[0], TRANSMIT.payload[1], TRANSMIT.payload[2] ,id );
-
-		 /*UART transmission*/
- 		 HAL_UART_Transmit(&huart2,(uint8_t *)uart_buf,uart_buf_len,100);
 
  		 /*Visual verification of timer working*/
 		 HAL_GPIO_TogglePin(GPIOA , GPIO_PIN_5);
@@ -557,15 +600,18 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 }
 
 /*  DEFINTION OF REQUEST CREATION FUNCTION  */
-void create_request(CAN_TxHeaderTypeDef pTxHeader,uint32_t identifier ,uint8_t length , uint8_t service_id , uint8_t parameter_id)
+void create_request(CAN_TxHeaderTypeDef pTxHeader,uint32_t identifier ,uint8_t length , uint8_t service_id , uint8_t parameter_id,uint8_t request_no)
 {
 	 pTxHeader.IDE =CAN_ID_EXT;//using extended identifier
 	 pTxHeader.ExtId = identifier;//setting the identifier
 	 pTxHeader.DLC = 8;//length of payload in bytes
 	 pTxHeader.RTR= CAN_RTR_DATA;
-	 TRANSMIT.length = length ;
-	 TRANSMIT.service_id = service_id;
-	 TRANSMIT.parameter_id = parameter_id;
+
+	 /*Creating accordiong to request number*/
+
+	 trans_data[request_no - 1 ][0] = length;
+	 trans_data[request_no - 1 ][1] = service_id;
+	 trans_data[request_no - 1 ][2] = parameter_id;
 
 
 }
