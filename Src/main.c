@@ -23,12 +23,21 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+uint8_t flag = 0;
 
+// this interrupts changes flag to 1 as soon as the uint8_t buff[300] is full
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+
+	flag = 1;
+
+}
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -44,12 +53,15 @@
 /* Private variables ---------------------------------------------------------*/
 TIM_HandleTypeDef htim10;
 
+UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
+DMA_HandleTypeDef hdma_usart1_rx;
 
 /* USER CODE BEGIN PV */
-char uart_buf[50];
+char uart_buf[300];
 int uart_buf_len;
 uint8_t a = 0;
+uint8_t data;
 union tran_data
 {
 	uint8_t payload[8];
@@ -68,13 +80,25 @@ union tran_data
 
 
 union tran_data TRANSMIT;
+uint8_t trans_data[5][8] = {
+   {0x21, 0x30, 0x1, 0,0,0,0,0} ,   /*  payload request 1*/
+   {0x21, 0x26, 0x2, 0,0,0,0} ,   /*  payload request 2 */
+   {0x21, 0x24, 0x1,0,0,0,0},  /*  payload request 3*/
+   {0x21, 0x9a, 0x2,0,0,0,0},   /*  payload request 4 */
+   {0x21, 0x3d, 0x1, 0,0,0,0} /*  payload request 5 */
+};
+
+
+uint8_t tim_flag = 0 ;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_TIM10_Init(void);
+static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 /*Use this method to create your desired request
@@ -83,10 +107,10 @@ static void MX_TIM10_Init(void);
  * length : LENGTH OF VALID BYTES -
  * service_id : SERVICE ID OF YOUR REQUEST
  * parameter_id : PARAMETER ID OF YOUR REQUEST
- *
+ * request_no : Index of the request you want to create
  *
  * */
-void create_request(uint32_t identifier , uint8_t length , uint8_t service_id , uint8_t parameter_id);
+void create_request(uint32_t identifier , uint8_t length , uint8_t service_id , uint8_t parameter_id , uint8_t request_no);
 
 
 /* USER CODE END PFP */
@@ -104,7 +128,8 @@ int main(void)
 {
   /* USER CODE BEGIN 1 */
 
-
+	uint8_t buff[255];
+	char buffStr[255];
   /* USER CODE END 1 */
   
 
@@ -121,18 +146,20 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
+  create_request(0x18DAFA00 , 0x4D,0x08,0x08,2);
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_USART2_UART_Init();
   MX_TIM10_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-//  uart_buf_len = sprintf(uart_buf,"Timer test\r\n");
-//  HAL_UART_Transmit(&huart2,(uint8_t *)uart_buf,uart_buf_len,100);
-//  timer_val = __HAL_TIM_GET_COUNTER(&htim10);
+
   HAL_TIM_Base_Start_IT(&htim10);
+  HAL_UART_Receive_DMA(&huart1, buff, 255);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -140,16 +167,27 @@ int main(void)
   while (1)
   {
 
+	  memset(buffStr, 0, 255);
 
-//    if(__HAL_TIM_GET_COUNTER(&htim10) - timer_val >= 2500)
-//    {
-//    	timer_val = __HAL_TIM_GET_COUNTER(&htim10) ;
-//    	uart_buf_len = sprintf(uart_buf,"%u us\r\n",timer_val);
-//    	HAL_UART_Transmit(&huart2,(uint8_t *)uart_buf,uart_buf_len,100);
-//        HAL_GPIO_TogglePin(GPIOA , GPIO_PIN_5);
-//    }
+	  sprintf(buffStr, "%s", buff);
+	  if(flag == 1)
+	  {
+		  HAL_UART_Transmit(&huart2, buff, 255, 70);
+	  }
 
 
+
+
+	  flag = 0;
+	  HAL_Delay(200);
+
+//	  if(tim_flag == 1)
+//	  {
+//		  uart_buf_len = sprintf(uart_buf,"Data Logged,\r\n" );
+//		  HAL_UART_Transmit(&huart2,(uint8_t *)uart_buf,uart_buf_len,100);
+//		  tim_flag = 0;
+//
+//	  }
 
     /* USER CODE END WHILE */
 
@@ -233,6 +271,39 @@ static void MX_TIM10_Init(void)
 }
 
 /**
+  * @brief USART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART1_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART1_Init 0 */
+
+  /* USER CODE END USART1_Init 0 */
+
+  /* USER CODE BEGIN USART1_Init 1 */
+
+  /* USER CODE END USART1_Init 1 */
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 9600;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART1_Init 2 */
+
+  /* USER CODE END USART1_Init 2 */
+
+}
+
+/**
   * @brief USART2 Initialization Function
   * @param None
   * @retval None
@@ -262,6 +333,21 @@ static void MX_USART2_UART_Init(void)
   /* USER CODE BEGIN USART2_Init 2 */
 
   /* USER CODE END USART2_Init 2 */
+
+}
+
+/** 
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void) 
+{
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA2_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA2_Stream2_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream2_IRQn);
 
 }
 
@@ -306,27 +392,27 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	if(htim == &htim10)
 	{
 //		 timer_val = __HAL_TIM_GET_COUNTER(&htim10);
-         uint32_t id = 0x18DAFA00 ;
-		 create_request(0x18DAFA00 , 0x2D,0x08,0x08);
-
-		 uart_buf_len = sprintf(uart_buf,"%x , %x , %x , %lx,\r\n",TRANSMIT.payload[0], TRANSMIT.payload[1], TRANSMIT.payload[2] ,id );
-		 HAL_UART_Transmit(&huart2,(uint8_t *)uart_buf,uart_buf_len,100);
+//         uint32_t id = 0x18DAFA00 ;
+//		 create_request(0x18DAFA00 , 0x4D,0x08,0x08);
+         tim_flag = 1;
+//     	 uart_buf_len = sprintf(uart_buf,"%x , %x , %x , %x,\r\n",trans_data[1][0], trans_data[1][1],trans_data[1][2] ,trans_data[1][3] );
+//		 HAL_UART_Transmit(&huart2,(uint8_t *)uart_buf,uart_buf_len,100);
 		 HAL_GPIO_TogglePin(GPIOA , GPIO_PIN_5);
 
 
 	}
 
 }
-void create_request(uint32_t identifier , uint8_t length , uint8_t service_id , uint8_t parameter_id)
+void create_request(uint32_t identifier , uint8_t length , uint8_t service_id , uint8_t parameter_id,uint8_t request_no)
 {
+//	 pTxHeader.IDE =CAN_ID_EXT;//using extended identifier
+//	 pTxHeader.ExtId = identifier;//setting the identifier
+//	 pTxHeader.DLC = 8;//length of payload in bytes
+//	 pTxHeader.RTR= CAN_RTR_DATA;
 
-	 uart_buf_len = sprintf(uart_buf,"Data to be logged %d\r\n",length);
-	 TRANSMIT.length = length ;
-	 TRANSMIT.service_id = service_id;
-	 TRANSMIT.parameter_id = parameter_id;
-
-
-
+	 trans_data[request_no - 1 ][0] = length;
+	 trans_data[request_no - 1 ][1] = service_id;
+	 trans_data[request_no - 1 ][2] = parameter_id;
 }
 /* USER CODE END 4 */
 
