@@ -140,7 +140,7 @@ int main(void)
 
   }
   for (uint8_t i=0; i<req_length; i++)
-  {
+    {
 	  trans_data[i] = (uint8_t *)calloc(8 , sizeof(uint8_t));
 
               if (trans_data[i] == NULL)
@@ -151,7 +151,7 @@ int main(void)
               }
 
 
-  }
+    }
   for (uint8_t i=0; i<req_length; i++)
     {
   	  rec_data[i] = (uint8_t *)calloc(8 , sizeof(uint8_t));
@@ -214,12 +214,7 @@ int main(void)
 
 		  recieved = 1;//THIS MEANS THE RESPONSE IS STILL TO BE RECIEVED
 
-          if(indx == req_length)
-          {
 
-        	  tim_flag = 0; //reset timer flag
-        	  indx = 0 ;
-          }
 
 
 	  }
@@ -227,6 +222,12 @@ int main(void)
 	  {
          /*WRITING TO SD CARD SINCE THIS TIME IS WAITING FOR A RESPONSE*/
 	  }
+	  if(indx == req_length)
+		{
+
+		  tim_flag = 0; //reset timer flag
+		  indx = 0 ;
+		}
     /* USER CODE END WHILE */
     MX_USB_HOST_Process();
 
