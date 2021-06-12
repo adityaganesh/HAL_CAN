@@ -25,6 +25,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
+#include <stdlib.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -59,21 +60,21 @@ UART_HandleTypeDef huart2;
 CAN_HandleTypeDef HalCan1;
 CAN_RxHeaderTypeDef pRxHeader; //This is used to give essential information about reception message
 CAN_TxHeaderTypeDef pTxHeader; // This is used to give essential information about transmission message
-uint8_t rec_data[8];//Data array used to store received data
+//Data array used to store received data
 uint32_t TxMailbox;
 char uart_buf[50];//used for logging data to serial monitor
 int uart_buf_len;
 /*This multidimensional data array has all the requests payload so that it is easy to create the payload frame*/
-uint8_t trans_data[5][8] = {
-   {0x21, 0x30, 0x1, 0,0,0,0,0} ,   /*  payload request 1*/
-   {0x21, 0x26, 0x2, 0,0,0,0} ,   /*  payload request 2 */
-   {0x21, 0x24, 0x1,0,0,0,0},  /*  payload request 3*/
-   {0x21, 0x9a, 0x2,0,0,0,0},   /*  payload request 4 */
-   {0x21, 0x3d, 0x1, 0,0,0,0} /*  payload request 5 */
-};
+
 
 uint8_t tim_flag = 0;
+uint8_t recieved = 0;
 uint8_t indx = 0 ;
+uint8_t req_length = 5;
+uint8_t **trans_data;//trasmission data array
+uint8_t **rec_data;//reception data array
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -99,7 +100,7 @@ void MX_USB_HOST_Process(void);
  * request_no : Index of the request you want to create
  *
  * */
-void create_request(CAN_TxHeaderTypeDef pTxHeader ,uint32_t identifier, uint8_t length , uint8_t service_id , uint8_t parameter_id,uint8_t request_no);
+void create_request(CAN_TxHeaderTypeDef pTxHeader ,uint32_t identifier, uint8_t length , uint8_t service_id , uint8_t parameter_id,uint8_t request_no,uint8_t request_length);
 
 
 /* USER CODE END PFP */
@@ -126,22 +127,59 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
+  trans_data = (uint8_t **)calloc(req_length , sizeof(uint8_t *));
+  rec_data = (uint8_t **)calloc(req_length , sizeof(uint8_t *));
+  if (trans_data == NULL)
+  {
+          printf("Memory not allocated.\n");
 
+  }
+  if (rec_data == NULL)
+  {
+          printf("Memory not allocated.\n");
+
+  }
+  for (uint8_t i=0; i<req_length; i++)
+  {
+	  trans_data[i] = (uint8_t *)calloc(8 , sizeof(uint8_t));
+
+              if (trans_data[i] == NULL)
+              {
+            	  printf("Memory not allocated.\n");
+
+
+              }
+
+
+  }
+  for (uint8_t i=0; i<req_length; i++)
+    {
+  	  rec_data[i] = (uint8_t *)calloc(8 , sizeof(uint8_t));
+
+                if (rec_data[i] == NULL)
+                {
+              	  printf("Memory not allocated.\n");
+
+
+                }
+
+
+    }
   /* USER CODE END Init */
 
   /* Configure the system clock */
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-  create_request(pTxHeader,0x18DAFA00,0x21, 0x30, 0x1,1); // Creation of request 1
+  create_request(pTxHeader,0x18DAFA00,0x21, 0x30, 0x1,1,5); // Creation of request 1
 
-  create_request(pTxHeader,0x18DAFA00,0x21, 0x26, 0x2,2);  // Creation of request 2
+  create_request(pTxHeader,0x18DAFA00,0x21, 0x26, 0x2,2,5);  // Creation of request 2
 
-  create_request(pTxHeader,0x18DAFA00,0x21, 0x24, 0x1,3);  // Creation of request 3
+  create_request(pTxHeader,0x18DAFA00,0x21, 0x24, 0x1,3,5);  // Creation of request 3
 
-  create_request(pTxHeader,0x18DAFA00,0x21, 0x9a, 0x2,4);  // Creation of request 4
+  create_request(pTxHeader,0x18DAFA00,0x21, 0x9a, 0x2,4,5);  // Creation of request 4
 
-  create_request(pTxHeader,0x18DAFA00,0x21, 0x3d, 0x1,5);  // Creation of request 5
+  create_request(pTxHeader,0x18DAFA00,0x21, 0x3d, 0x1,5,5);  // Creation of request 5
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -168,51 +206,26 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  if(tim_flag == 1)
+	  if(tim_flag == 1 && recieved == 0)
 	  {
 		  HAL_CAN_AddTxMessage(&HalCan1, &pTxHeader, trans_data[indx], &TxMailbox);//This will send the first transmission request
+
 		  while(HAL_CAN_IsTxMessagePending(&HalCan1,TxMailbox));//will wait until the request is sent
-          while(HAL_CAN_GetRxFifoFillLevel(&HalCan1,CAN_RX_FIFO0))//will wait until the response is recieved
 
+		  recieved = 1;//THIS MEANS THE RESPONSE IS STILL TO BE RECIEVED
 
-
-          HAL_CAN_GetRxMessage(&HalCan1,  CAN_RX_FIFO0 , &pRxHeader, rec_data);//callback for recieved response
-          if(rec_data[0] > 0 && rec_data[1] == trans_data[indx][1]+0x40 && trans_data[indx][2] == rec_data[2] )//checks if valid data bytes are more than 0 then checks service and parameter id
-          {
-        	  for(int i = 3;i<=rec_data[0];i++)
-        	  {
-        		  uart_buf_len = sprintf(uart_buf,"%x",rec_data[i] );
-        		  if(i != rec_data[0])
-        		  {
-        			  uart_buf_len = sprintf(uart_buf,"%x , ",rec_data[i] );//will print with comma if their are more valid data bytes
-
-        		  }
-        		  else
-        		  {
-        			  uart_buf_len = sprintf(uart_buf,"%x\n",rec_data[i] );// will not print comma as it is the last valid data byte
-
-        		  }
-        		  /*UART transmission*/
-        		  HAL_UART_Transmit(&huart2,(uint8_t *)uart_buf,uart_buf_len,100);
-
-
-        	  }
-
-
-     		 /*UART transmission*/
-
-
-
-
-          }
-          indx ++;//increase request index by 1 for next transmission request
-          if(indx == 5)
+          if(indx == req_length)
           {
 
         	  tim_flag = 0; //reset timer flag
+        	  indx = 0 ;
           }
 
 
+	  }
+	  if (tim_flag == 1 && recieved == 1)
+	  {
+         /*WRITING TO SD CARD SINCE THIS TIME IS WAITING FOR A RESPONSE*/
 	  }
     /* USER CODE END WHILE */
     MX_USB_HOST_Process();
@@ -600,7 +613,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 }
 
 /*  DEFINTION OF REQUEST CREATION FUNCTION  */
-void create_request(CAN_TxHeaderTypeDef pTxHeader,uint32_t identifier ,uint8_t length , uint8_t service_id , uint8_t parameter_id,uint8_t request_no)
+void create_request(CAN_TxHeaderTypeDef pTxHeader,uint32_t identifier ,uint8_t length , uint8_t service_id , uint8_t parameter_id,uint8_t request_no,uint8_t request_length)
 {
 	 pTxHeader.IDE =CAN_ID_EXT;//using extended identifier
 	 pTxHeader.ExtId = identifier;//setting the identifier
@@ -608,6 +621,49 @@ void create_request(CAN_TxHeaderTypeDef pTxHeader,uint32_t identifier ,uint8_t l
 	 pTxHeader.RTR= CAN_RTR_DATA;
 
 	 /*Creating accordiong to request number*/
+	 if(request_length > req_length)
+	 {
+
+	  req_length = request_length;
+	  trans_data = realloc(trans_data,req_length*sizeof(uint8_t *));
+	  rec_data = realloc(rec_data,req_length*sizeof(uint8_t *));
+	  for (uint8_t i=0; i<req_length; i++)
+	  {
+
+
+		  trans_data[i] = (uint8_t *)calloc(8 , sizeof(uint8_t));
+
+		  if (trans_data[i] == NULL)
+		  {
+			  printf("Memory not allocated.\n");
+
+
+		  }
+
+
+	    }
+
+
+
+	  for (uint8_t i=0; i<req_length; i++)
+	  {
+
+
+		  rec_data[i] = (uint8_t *)calloc(8 , sizeof(uint8_t));
+
+		  if (rec_data[i] == NULL)
+		  {
+			  printf("Memory not allocated.\n");
+
+
+		  }
+
+
+	    }
+
+
+
+     }
 
 	 trans_data[request_no - 1 ][0] = length;
 	 trans_data[request_no - 1 ][1] = service_id;
