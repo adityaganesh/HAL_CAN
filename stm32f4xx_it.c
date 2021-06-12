@@ -20,6 +20,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include <stdio.h>
 #include "stm32f4xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -62,9 +63,13 @@ extern TIM_HandleTypeDef htim10;
 /* USER CODE BEGIN EV */
 extern CAN_TxHeaderTypeDef pTxHeader;
 extern CAN_RxHeaderTypeDef pRxHeader;
-extern uint8_t rec_data[8];
+extern uint8_t **rec_data;
 extern CAN_HandleTypeDef HalCan1;
-extern union tran_data TRANSMIT;
+extern uint8_t req_length ;
+extern uint8_t **trans_data;
+extern uint8_t recieved;
+extern uint8_t indx;
+extern UART_HandleTypeDef huart2;
 /* USER CODE END EV */
 
 /******************************************************************************/
@@ -228,7 +233,44 @@ void CAN1_RX0_IRQHandler(void)
   HAL_CAN_IRQHandler(&hcan1);
   /* USER CODE BEGIN CAN1_RX0_IRQn 1 */
 
-  HAL_CAN_GetRxMessage(&HalCan1,  CAN_RX_FIFO0 , &pRxHeader, rec_data);
+  recieved = 0 ;//RESPONSE RECIEVED
+
+  char uart_buf[50];
+
+  int uart_buf_len;
+
+  HAL_CAN_GetRxMessage(&HalCan1,  CAN_RX_FIFO0 , &pRxHeader, rec_data[indx]);//GET MESSAGE ACCORDING TO INDEX
+
+  if(rec_data[indx][0] > 0 && rec_data[indx][1] == trans_data[indx][1]+0x40 && trans_data[indx][2] == rec_data[indx][2] )//checks if valid data bytes are more than 0 then checks service and parameter id
+  {
+	  for(int i = 3;i<=rec_data[indx][0];i++)
+	  {
+		  uart_buf_len = sprintf(uart_buf,"%x",rec_data[indx][i] );
+		  if(i != rec_data[indx][0])
+		  {
+			  uart_buf_len = sprintf(uart_buf,"%x , ",rec_data[indx][i] );//will print with comma if their are more valid data bytes
+
+		  }
+		  else
+		  {
+			  uart_buf_len = sprintf(uart_buf,"%x\n",rec_data[indx][i] );// will not print comma as it is the last valid data byte
+
+		  }
+		  /*UART transmission*/
+		  HAL_UART_Transmit(&huart2,(uint8_t *)uart_buf,uart_buf_len,100);
+
+
+	  }
+
+
+		 /*UART transmission*/
+
+
+
+
+  }
+  indx ++;//INCREASE INDEX FOR NEXT REQUEST
+
   /* USER CODE END CAN1_RX0_IRQn 1 */
 }
 
