@@ -26,6 +26,7 @@
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -70,10 +71,13 @@ int uart_buf_len;
 uint8_t tim_flag = 0;
 uint8_t recieved = 0;
 uint8_t indx = 0 ;
-uint8_t req_length = 5;
-uint8_t **trans_data;//trasmission data array
+uint8_t req_length = 5;//no.of requests
+uint8_t brd_length = 4;//no.of broadcast responses
+uint8_t **trans_data;//transmission data array
 uint8_t **rec_data;//reception data array
-
+uint8_t **brd_data;//broadcast specifications data array
+uint8_t **brd_rec;//broadcast recieve data array
+uint32_t* brd_idnt;//broadcast identifier array
 
 /* USER CODE END PV */
 
@@ -102,6 +106,25 @@ void MX_USB_HOST_Process(void);
  * */
 void create_request(CAN_TxHeaderTypeDef pTxHeader ,uint32_t identifier, uint8_t length , uint8_t service_id , uint8_t parameter_id,uint8_t request_no,uint8_t request_length);
 
+/*
+ *
+ * identifier : Extended Identifier of the broadcasted response
+ * indx: Index of the broadcasted response
+ * length: Length of the brd parameter in frame
+ * pass the position and length of parameter according to the length of brd parameters in frame
+ * Note: Use this is in system intitalization part of code
+ *
+ * */
+
+void brd_param(uint32_t identifier , uint8_t indx,uint8_t length,... );
+
+/*
+ * length: The number of broadcasted responses you are expecting
+ * Note:- Use this before using brd_param
+ *
+ * */
+
+void num_brd(uint8_t length);
 
 /* USER CODE END PFP */
 
@@ -127,14 +150,39 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
+
+  //Data array that needs to be transmitted
   trans_data = (uint8_t **)calloc(req_length , sizeof(uint8_t *));
+
+  //Data array that will be recieved
   rec_data = (uint8_t **)calloc(req_length , sizeof(uint8_t *));
+
+  //Broadcast parameter data array
+  brd_data = (uint8_t **)calloc(brd_length , sizeof(uint8_t *));
+
+  //Broadcast response array
+  brd_rec = (uint8_t **)calloc(brd_length , sizeof(uint8_t *));
+
+  //Broadcast message identifier array
+  brd_idnt = (uint32_t*)calloc(brd_length , sizeof(uint32_t));
+
+  /*Dynamic Memory allocation of the above declared arrays*/
   if (trans_data == NULL)
   {
           printf("Memory not allocated.\n");
 
   }
   if (rec_data == NULL)
+  {
+          printf("Memory not allocated.\n");
+
+  }
+  if (brd_data == NULL)
+  {
+          printf("Memory not allocated.\n");
+
+  }
+  if (brd_rec == NULL)
   {
           printf("Memory not allocated.\n");
 
@@ -165,6 +213,32 @@ int main(void)
 
 
     }
+  for (uint8_t i=0; i<brd_length; i++)
+    {
+  	  brd_data[i] = (uint8_t *)calloc(17 , sizeof(uint8_t));
+
+                if (brd_data[i] == NULL)
+                {
+              	  printf("Memory not allocated.\n");
+
+
+                }
+
+
+    }
+  for (uint8_t i=0; i<brd_length; i++)
+    {
+  	  brd_rec[i] = (uint8_t *)calloc(8 , sizeof(uint8_t));
+
+                if (brd_rec[i] == NULL)
+                {
+              	  printf("Memory not allocated.\n");
+
+
+                }
+
+
+    }
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -180,6 +254,16 @@ int main(void)
   create_request(pTxHeader,0x18DAFA00,0x21, 0x9a, 0x2,4,5);  // Creation of request 4
 
   create_request(pTxHeader,0x18DAFA00,0x21, 0x3d, 0x1,5,5);  // Creation of request 5
+
+  num_brd(4); // Specifying the number of broadcast messages we would be expecting
+
+  brd_param(0xF00400,1, 3, 2, 4, 5, 2, 1, 2); // Creation of Broadcast parameter frame 1
+
+  brd_param(0xF00300,2, 2, 1, 3, 1, 2); // Creation of Broadcast parameter frame 2
+
+  brd_param(0xFEFF00,3, 1, 4, 1); // Creation of Broadcast parameter frame 3
+
+  brd_param(0xF0F400,4, 1, 3, 2); // Creation of Broadcast parameter frame 4
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -206,22 +290,12 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  if(tim_flag == 1 && recieved == 0)
-	  {
-		  HAL_CAN_AddTxMessage(&HalCan1, &pTxHeader, trans_data[indx], &TxMailbox);//This will send the first transmission request
+      if(recieved == 1)
 
-		  while(HAL_CAN_IsTxMessagePending(&HalCan1,TxMailbox));//will wait until the request is sent
+      {
+    	  /*PRINT THE RESPONSE FOR INDEX-1 request*/
+      }
 
-		  recieved = 1;//THIS MEANS THE RESPONSE IS STILL TO BE RECIEVED
-
-
-
-
-	  }
-	  if (tim_flag == 1 && recieved == 1)
-	  {
-         /*WRITING TO SD CARD SINCE THIS TIME IS WAITING FOR A RESPONSE*/
-	  }
 	  if(indx == req_length)
 		{
 
@@ -602,7 +676,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	{
         /*Raising the timer flag so that code in while loop starts running since ISR should be generally fast to execute*/
 
-         tim_flag = 1;
+
+         HAL_CAN_AddTxMessage(&HalCan1, &pTxHeader, trans_data[indx], &TxMailbox);//This will send the first transmission request
+
 
 
  		 /*Visual verification of timer working*/
@@ -621,12 +697,15 @@ void create_request(CAN_TxHeaderTypeDef pTxHeader,uint32_t identifier ,uint8_t l
 	 pTxHeader.DLC = 8;//length of payload in bytes
 	 pTxHeader.RTR= CAN_RTR_DATA;
 
-	 /*Creating accordiong to request number*/
+	 /*Creating according to request number*/
 	 if(request_length > req_length)
 	 {
 
-	  req_length = request_length;
+	  req_length = request_length;//changing the length of request frames to be sent
+
+	  /*Dynamic memory allocation of the data arrays according to the length*/
 	  trans_data = realloc(trans_data,req_length*sizeof(uint8_t *));
+
 	  rec_data = realloc(rec_data,req_length*sizeof(uint8_t *));
 	  for (uint8_t i=0; i<req_length; i++)
 	  {
@@ -665,10 +744,79 @@ void create_request(CAN_TxHeaderTypeDef pTxHeader,uint32_t identifier ,uint8_t l
 
 
      }
-
+     //Storing the required parameters that needs to be transmitted
 	 trans_data[request_no - 1 ][0] = length;
 	 trans_data[request_no - 1 ][1] = service_id;
 	 trans_data[request_no - 1 ][2] = parameter_id;
+
+
+}
+
+/*  DEFINTION OF BROADCAST PARAMETER FRAME CREATION FUNCTION  */
+void brd_param(uint32_t identifier , uint8_t indx,uint8_t length , ...)
+{
+
+  va_list parameters;
+
+  va_start(parameters,length*2);
+
+  brd_idnt[ indx - 1 ] = identifier;//storing the identifier in the broadcast identifier array
+
+  brd_data[ indx - 1 ][0] = length;//storing the length of broadcast specification array
+
+  for (uint8_t i = 0; i <= length*2; i++)
+  {
+	  brd_data[indx-1][i+1] = (uint8_t)va_arg(parameters, int);//storing the parameters of the broadcast parameter
+
+
+  }
+
+
+  va_end(parameters);
+
+
+}
+
+void num_brd(uint8_t length)
+{
+	 if(length > brd_length)
+	 {
+
+	  brd_length = length;//changing the length of broadcast parameter frame expected
+
+	  /*Dynamic memory allocation for the arrays according to the length*/
+	  brd_data = realloc(brd_data,length*sizeof(uint8_t *));
+
+	  brd_rec = realloc(brd_rec,length*sizeof(uint8_t *));
+
+	  brd_idnt = realloc(brd_idnt,length*sizeof(uint32_t *));
+
+	  for (uint8_t i=0; i<length; i++)
+	  {
+
+
+		  brd_data[i] = (uint8_t *)calloc(17 , sizeof(uint8_t));
+
+		  brd_rec[i] = (uint8_t *)calloc(8 , sizeof(uint8_t));
+
+		  if (brd_data[i] == NULL)
+		  {
+			  printf("Memory not allocated.\n");
+
+
+		  }
+		  if (brd_rec[i] == NULL)
+		  {
+			  printf("Memory not allocated.\n");
+
+
+		  }
+
+
+	    }
+
+
+	 }
 
 
 }
