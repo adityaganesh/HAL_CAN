@@ -43,7 +43,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-
+uint8_t rec[8];//to recieve the CAN response
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -61,15 +61,22 @@ extern HCD_HandleTypeDef hhcd_USB_OTG_FS;
 extern CAN_HandleTypeDef hcan1;
 extern TIM_HandleTypeDef htim10;
 /* USER CODE BEGIN EV */
+
+//To see what this variables do refer to main.c private variables
+extern UART_HandleTypeDef huart2;
+extern CAN_HandleTypeDef HalCan1;
 extern CAN_TxHeaderTypeDef pTxHeader;
 extern CAN_RxHeaderTypeDef pRxHeader;
-extern uint8_t **rec_data;
-extern CAN_HandleTypeDef HalCan1;
-extern uint8_t req_length ;
-extern uint8_t **trans_data;
+extern uint32_t TxMailbox;
 extern uint8_t recieved;
 extern uint8_t indx;
-extern UART_HandleTypeDef huart2;
+extern uint8_t req_length ;
+extern uint8_t brd_length;
+extern uint8_t **trans_data;
+extern uint8_t **rec_data;
+extern uint8_t **brd_data;//broadcast specifications data array
+extern uint8_t **brd_rec;//broadcast recieve data array
+extern uint32_t* brd_idnt;//broadcast identifier array
 /* USER CODE END EV */
 
 /******************************************************************************/
@@ -239,10 +246,17 @@ void CAN1_RX0_IRQHandler(void)
 
   int uart_buf_len;
 
-  HAL_CAN_GetRxMessage(&HalCan1,  CAN_RX_FIFO0 , &pRxHeader, rec_data[indx]);//GET MESSAGE ACCORDING TO INDEX
+  HAL_CAN_GetRxMessage(&HalCan1,  CAN_RX_FIFO0 , &pRxHeader, rec);//GET THE RESPONSE
+  //TRANSFER THE RESPONSE TO TEMPORARILY STORE IN AN DATA ARRAY
+  for(uint8_t k = 0; k<8;k++)
+  {
+	  rec_data[indx][k] = rec[k];
+  }
 
+  //THIS WILL HAPPEN ONLY IF WE GET THE RESPONSE FOR THE REQUEST WE SENT WE ALSO NEED TO TAKE CARE OF BROADCAST MESSAGES
   if(rec_data[indx][0] > 0 && rec_data[indx][1] == trans_data[indx][1]+0x40 && trans_data[indx][2] == rec_data[indx][2] )//checks if valid data bytes are more than 0 then checks service and parameter id
   {
+
 	  for(int i = 3;i<=rec_data[indx][0];i++)
 	  {
 		  uart_buf_len = sprintf(uart_buf,"%x",rec_data[indx][i] );
@@ -261,6 +275,13 @@ void CAN1_RX0_IRQHandler(void)
 
 
 	  }
+	  indx ++;
+	  if(indx < req_length)
+	  {
+		  HAL_CAN_AddTxMessage(&HalCan1, &pTxHeader, trans_data[indx], &TxMailbox);//This will send the first transmission request
+	      recieved = 1;
+	  }
+	  while(HAL_CAN_IsTxMessagePending(&HalCan1,TxMailbox));
 
 
 		 /*UART transmission*/
@@ -269,7 +290,29 @@ void CAN1_RX0_IRQHandler(void)
 
 
   }
-  indx ++;//INCREASE INDEX FOR NEXT REQUEST
+  //WHEN A BROADCAST MESSAGE IS SENT IT WILL COME HERE
+  else
+  {
+	  uint8_t l = 0;//used so that the whole response is stored according to the parameters into another array
+
+	  for (uint8_t k = 0 ; k  < brd_length ;k++)
+	  {
+		  if(pRxHeader.ExtId == brd_idnt[k])//checking if the broadcasted message is the one we are looking for
+		  {
+			     for (uint8_t i = 1 ; i <= brd_data[i][0]; i++)//increasing till the lenght of broadcast parameter length
+			     {
+			  	   for (uint8_t j  = 0 ;j < brd_data[k][brd_data[i][0]] ; j++)//increasing till the length of the particular parameter's length
+			  	   {
+			  		   brd_rec[k][l]=rec[i+j];//storing it in our broadcast data recorded array which we will later use to store in sd card
+                       l++;
+			  	   }
+
+			     }
+		  }
+	  }
+
+  }
+  //INCREASE INDEX FOR NEXT REQUEST
 
   /* USER CODE END CAN1_RX0_IRQn 1 */
 }
