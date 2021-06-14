@@ -72,6 +72,9 @@ extern uint8_t recieved;
 extern uint8_t indx;
 extern uint8_t req_length ;
 extern uint8_t brd_length;
+extern uint8_t response;
+extern uint8_t broadcast;
+extern uint8_t rec[8];
 extern uint8_t **trans_data;
 extern uint8_t **rec_data;
 extern uint8_t **brd_data;//broadcast specifications data array
@@ -240,79 +243,84 @@ void CAN1_RX0_IRQHandler(void)
   HAL_CAN_IRQHandler(&hcan1);
   /* USER CODE BEGIN CAN1_RX0_IRQn 1 */
 
-  recieved = 0 ;//RESPONSE RECIEVED
 
-  char uart_buf[50];
 
-  int uart_buf_len;
 
   HAL_CAN_GetRxMessage(&HalCan1,  CAN_RX_FIFO0 , &pRxHeader, rec);//GET THE RESPONSE
   //TRANSFER THE RESPONSE TO TEMPORARILY STORE IN AN DATA ARRAY
-  for(uint8_t k = 0; k<8;k++)
-  {
-	  rec_data[indx][k] = rec[k];
-  }
+
 
   //THIS WILL HAPPEN ONLY IF WE GET THE RESPONSE FOR THE REQUEST WE SENT WE ALSO NEED TO TAKE CARE OF BROADCAST MESSAGES
-  if(rec_data[indx][0] > 0 && rec_data[indx][1] == trans_data[indx][1]+0x40 && trans_data[indx][2] == rec_data[indx][2] )//checks if valid data bytes are more than 0 then checks service and parameter id
+  if(rec[0] > 0 && rec[1] == trans_data[indx][1]+0x40 && trans_data[indx][2] == rec[2] )//checks if valid data bytes are more than 0 then checks service and parameter id
   {
 
-	  for(int i = 3;i<=rec_data[indx][0];i++)
+	  for(uint8_t k = 0; k<8;k++)
+
 	  {
-		  uart_buf_len = sprintf(uart_buf,"%x",rec_data[indx][i] );
-		  if(i != rec_data[indx][0])
-		  {
-			  uart_buf_len = sprintf(uart_buf,"%x , ",rec_data[indx][i] );//will print with comma if their are more valid data bytes
 
-		  }
-		  else
-		  {
-			  uart_buf_len = sprintf(uart_buf,"%x\n",rec_data[indx][i] );// will not print comma as it is the last valid data byte
-
-		  }
-		  /*UART transmission*/
-		  HAL_UART_Transmit(&huart2,(uint8_t *)uart_buf,uart_buf_len,100);
-
+		  rec_data[indx][k] = rec[k];//storing the recieved data in a data array which will be later used for logging data onto sd card
 
 	  }
-	  indx ++;
+
+	  indx ++;//increasing the index so that next request is sent
+
+	  response = 1;//this indicates that response is recieved but not logged
+
 	  if(indx < req_length)
+
 	  {
+
 		  HAL_CAN_AddTxMessage(&HalCan1, &pTxHeader, trans_data[indx], &TxMailbox);//This will send the first transmission request
-	      recieved = 1;
+
 	  }
+
 	  while(HAL_CAN_IsTxMessagePending(&HalCan1,TxMailbox));
-
-
-		 /*UART transmission*/
-
-
-
-
+	 /*UART transmission*/
   }
+
   //WHEN A BROADCAST MESSAGE IS SENT IT WILL COME HERE
   else
   {
 	  uint8_t l = 0;//used so that the whole response is stored according to the parameters into another array
+      if(broadcast == 1)// this means we can now recieve broadcast messages this will be made high when we recieve a timer interrupt and low when we recieve all messages
 
-	  for (uint8_t k = 0 ; k  < brd_length ;k++)
-	  {
-		  if(pRxHeader.ExtId == brd_idnt[k])//checking if the broadcasted message is the one we are looking for
-		  {
-			     for (uint8_t i = 1 ; i <= brd_data[i][0]; i++)//increasing till the lenght of broadcast parameter length
-			     {
-			  	   for (uint8_t j  = 0 ;j < brd_data[k][brd_data[i][0]] ; j++)//increasing till the length of the particular parameter's length
-			  	   {
-			  		   brd_rec[k][l]=rec[i+j];//storing it in our broadcast data recorded array which we will later use to store in sd card
-                       l++;
-			  	   }
+      {
+
+    	  for (uint8_t k = 0 ; k  < brd_length ;k++)
+
+    	  {
+
+    		  if(pRxHeader.ExtId == brd_idnt[k])//checking if the broadcasted message is the one we are looking for
+
+    		  {
+                  //we use k in brd_data[k][0] since that is the index of array
+    			  for (uint8_t i = 1 ; i <= brd_data[k][0]; i++)//increasing till the length of broadcast parameter length
+
+    			  {
+
+    				  for (uint8_t j  = 0 ;j < brd_data[i+brd_data[k][0]] ; j++)//increasing till the length of the particular parameter's length
+
+    				  {
+
+    					  brd_rec[k][l]=rec[i+j];//storing it in our broadcast data recorded array which we will later use to store in sd card
+
+    					  l++;
+
+    				  }
 
 			     }
-		  }
+
+    			  brd_indx ++;
+
+    			  break;
+
+    		  }
+    	  }//end of verifying if the recieved message is the broadcast message we are looking for
 	  }
 
   }
-  //INCREASE INDEX FOR NEXT REQUEST
+
+
 
   /* USER CODE END CAN1_RX0_IRQn 1 */
 }
