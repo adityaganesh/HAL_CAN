@@ -73,12 +73,14 @@ uint8_t recieved = 0;
 uint8_t indx = 0 ;
 uint8_t req_length = 5;//no.of requests
 uint8_t brd_length = 4;//no.of broadcast responses
+uint8_t response = 0;
+uint8_t broadcast = 0;
 uint8_t **trans_data;//transmission data array
 uint8_t **rec_data;//reception data array
 uint8_t **brd_data;//broadcast specifications data array
 uint8_t **brd_rec;//broadcast recieve data array
 uint32_t* brd_idnt;//broadcast identifier array
-
+uitn8_t res_indx = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -290,17 +292,48 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-      if(recieved == 1)
+      if(response == 1)//this means we have recieved a message which is ready to be logged
 
       {
+    	  for(int i = 3;i<=rec_data[res_indx][0];i++)
+    	  {
+
+    		  if(i < rec_data[res_indx][0])
+    		  {
+    			  uart_buf_len = sprintf(uart_buf,"%x , ",rec_data[res_indx][i] );
+    			  f_write(&data_log,uart_buf_len,sizeof(uart_buf_len) );//will print with comma if their are more valid data bytes
+
+    		  }
+    		  else
+    		  {
+
+    			  uart_buf_len = sprintf(uart_buf,"%x\n",rec_data[indx][i] );
+    			  f_write(&data_log,uart_buf_len,sizeof(uart_buf_len) );// will not print comma as it is the last valid data byte
+
+    		  }
+    		  /*UART transmission*/
+
+
+
+    	  }
+    	  //response has been logged waiting for next response
+    	  res_indx ++;//increase the index so that next response is logged
+
     	  /*PRINT THE RESPONSE FOR INDEX-1 request*/
       }
+      if(brd_indx == brd_length)
+      {
+    	  broadcast = 0; //since all the messages have been recieved
+          brd_indx = 0;//reseting the index to 0 so that it will put data in correct index during next cycle of broadcast messages
+         /*START WRITING ALL THE BROADCAST DATA ON TO SD CARD*/
 
-	  if(indx == req_length)
+      }
+	  if(res_indx == req_length)
 		{
-
+          response = 0; //all responses is logged onto sd card
 		  tim_flag = 0; //reset timer flag
-		  indx = 0 ;
+		  indx = 0 ; //reset index
+		  res_indx = 0;//reset response log index
 		}
     /* USER CODE END WHILE */
     MX_USB_HOST_Process();
@@ -676,12 +709,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	{
         /*Raising the timer flag so that code in while loop starts running since ISR should be generally fast to execute*/
 
-
+		 tim_flag = 1 ;
+		 broadcast = 1;//we can recieve broadcast messages now
          HAL_CAN_AddTxMessage(&HalCan1, &pTxHeader, trans_data[indx], &TxMailbox);//This will send the first transmission request
-
-
-
- 		 /*Visual verification of timer working*/
+		 /*Visual verification of timer working*/
 		 HAL_GPIO_TogglePin(GPIOA , GPIO_PIN_5);
 
 
