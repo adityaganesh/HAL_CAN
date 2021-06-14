@@ -80,7 +80,7 @@ uint8_t **rec_data;//reception data array
 uint8_t **brd_data;//broadcast specifications data array
 uint8_t **brd_rec;//broadcast recieve data array
 uint32_t* brd_idnt;//broadcast identifier array
-uitn8_t res_indx = 0;
+uint8_t res_indx = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
