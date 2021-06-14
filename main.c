@@ -75,6 +75,7 @@ uint8_t req_length = 5;//no.of requests
 uint8_t brd_length = 4;//no.of broadcast responses
 uint8_t response = 0;
 uint8_t broadcast = 0;
+uint8_t brd_indx = 0;
 uint8_t **trans_data;//transmission data array
 uint8_t **rec_data;//reception data array
 uint8_t **brd_data;//broadcast specifications data array
