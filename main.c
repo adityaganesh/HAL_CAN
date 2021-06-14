@@ -284,7 +284,16 @@ int main(void)
 
   HAL_TIM_Base_Start_IT(&htim10);//Begin timer in interrupt mode see the ioc file to see the time at which interrupt is generated
 
+  FATFS data_log;
 
+  if(f_mount(&data_log,SD_Path,1)== R_OK)
+  {
+	  HAL_GPIO_TogglePin(GPIOA , GPIO_PIN_5);
+
+	  char sd_data[] = "DATA_LOG.TXT\0";
+
+	  f_open(&data_log,sd_data,FA_WRITE | FA_CREATE_ALWAYS);
+  }
 
   /* USER CODE END 2 */
 
@@ -295,6 +304,7 @@ int main(void)
       if(response == 1)//this means we have recieved a message which is ready to be logged
 
       {
+    	  f_open(&data_log,sd_data,FA_OPEN_APPEND);
     	  for(int i = 3;i<=rec_data[res_indx][0];i++)
     	  {
 
@@ -316,6 +326,7 @@ int main(void)
 
 
     	  }
+          f_close(&data);
     	  //response has been logged waiting for next response
     	  res_indx ++;//increase the index so that next response is logged
 
