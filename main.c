@@ -310,7 +310,7 @@ int main(void)
 
     		  if(i < rec_data[res_indx][0])
     		  {
-    			  uart_buf_len = sprintf(uart_buf,"%x , ",rec_data[res_indx][i] );
+    			  uart_buf_len = sprintf(uart_buf,"%x,",rec_data[res_indx][i] );
     			  f_write(&data_log,uart_buf_len,sizeof(uart_buf_len) );//will print with comma if their are more valid data bytes
 
     		  }
@@ -337,6 +337,38 @@ int main(void)
     	  broadcast = 0; //since all the messages have been recieved
           brd_indx = 0;//reseting the index to 0 so that it will put data in correct index during next cycle of broadcast messages
          /*START WRITING ALL THE BROADCAST DATA ON TO SD CARD*/
+          f_open(&data_log,sd_data,FA_OPEN_APPEND);
+    	  for (uint8_t k = 0 ; k  < brd_length ;k++)
+
+    	  {      uint8_t l = 0;
+                  //we use k in brd_data[k][0] since that is the index of array
+    			  for (uint8_t i = 1 ; i <= brd_data[k][0]; i++)//increasing till the length of broadcast parameter length
+
+    			  {
+
+    				  for (uint8_t j  = 0 ;j < brd_data[i+brd_data[k][0]] ; j++)//increasing till the length of the particular parameter's length
+
+    				  {
+
+    					  uart_buf_len = sprintf(uart_buf,"%x,",brd_rec[k][l] ); //storing it in our broadcast data recorded array which we will later use to store in sd card
+    					  f_write(&data_log,uart_buf_len,sizeof(uart_buf_len) );
+    					  l++;
+
+    				  }
+
+			     }
+
+    			  uart_buf_len = sprintf(uart_buf,"\n," ); //putting a new line at the end of 1 broadcast message completion
+    			  f_write(&data_log,uart_buf_len,sizeof(uart_buf_len) );
+
+
+    			  brd_indx ++;
+
+    			  break;
+
+
+    	  }
+    	  f_close(&data);
 
       }
 	  if(res_indx == req_length)
@@ -345,6 +377,7 @@ int main(void)
 		  tim_flag = 0; //reset timer flag
 		  indx = 0 ; //reset index
 		  res_indx = 0;//reset response log index
+
 		}
     /* USER CODE END WHILE */
     MX_USB_HOST_Process();
