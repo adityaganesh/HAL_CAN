@@ -75,6 +75,7 @@ extern uint8_t brd_length;
 extern uint8_t response;
 extern uint8_t broadcast;
 extern uint8_t rec[8];
+extern uint8_t brd_indx ;
 extern uint8_t **trans_data;
 extern uint8_t **rec_data;
 extern uint8_t **brd_data;//broadcast specifications data array
@@ -298,7 +299,7 @@ void CAN1_RX0_IRQHandler(void)
 
     			  {
 
-    				  for (uint8_t j  = 0 ;j < brd_data[i+brd_data[k][0]] ; j++)//increasing till the length of the particular parameter's length
+    				  for (uint8_t j  = 0 ;j < brd_data[k][i+brd_data[k][0]] ; j++)//increasing till the length of the particular parameter's length
 
     				  {
 
